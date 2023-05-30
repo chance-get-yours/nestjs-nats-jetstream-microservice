@@ -10,7 +10,7 @@
 ```bash
 npm i @nestjs/microservices
 npm i nats
-npm i @chance/nestjs-nats-jetstream-microservice
+npm i @chance-get-yours/nestjs-nats-jetstream-microservice
 ```
 ### Server
 NATS server could run locally
