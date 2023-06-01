@@ -38,11 +38,12 @@ Subjects can be queried using [NATS syntax](https://docs.nats.io/nats-concepts/s
 ```typescript
 const bootstrap = async () => {
   const options: CustomStrategy = {
-    strategy: new NatsJetStreamServer({
+    // Activate your consumers on this microservices
+    strategy: new NatsJetStreamConsumer({
       connectionOptions: {
         servers: "127.0.0.1:4222",
         // Name the client for connection hostname to avoid overlap
-        name: `nats-connection.${os.hostname()}`,
+        name: `nats-consumers-group1.${os.hostname()}`,
       },
       // Stream will be created if not exist
       // To work we need all this stream to be available
@@ -53,11 +54,13 @@ const bootstrap = async () => {
           subjects: ["booking.>"],
         } as Partial<StreamConfig>
       ],
+      // To have the consumer running, you must create them
+      // and have a controller using it 
     }),
   };
 
   // hybrid microservice and web application
-  const app = await NestFactory.create<NestFastifyApplication>(HotelBookingModule);
+  const app = await NestFactory.create(HotelBookingModule);
   const microService = app.connectMicroservice(options);
   await microService.listen();
   return app;
@@ -74,6 +77,8 @@ bootstrap();
 [Configuration options](https://docs.nats.io/nats-concepts/jetstream/consumers) could be set using library and the decorator. Or be set using the cli and using the named consumer with the decorator
 
 ```typescript
+import { EventPattern} from "./decorator/event-pattern.decorator";
+
 @Controller()
 export class BotNatsController {
   constructor(private scheduleCleaning: ScheduleCleaningCommandHandler) {}
@@ -81,12 +86,12 @@ export class BotNatsController {
   // Consumer will be created if not exists
   // Updated if exists
   @EventPattern("ConsumerName", {
+    stream_name: "hotel-booking",
     description: "Trigger cleaning side effect when room is booked",
     filter_subject: "booking.*.room-booked-event.>",
-    deliver_to: "cleanupInbox",
     durable: "cleanupStack",
     manual_ack: true,
-  } as ConsumeOptions)
+  })
   async cleanup(
     @Payload() event: RoomBookedEvent,
     @Ctx() context: NatsJetStreamContext
@@ -99,9 +104,12 @@ export class BotNatsController {
 ```
 
 ### Publishing events
+Here NATS client is prefered to use [deduplication pattern provided](https://nats.io/blog/new-per-subject-discard-policy/).
+
 ```typescript
 @Module({
   imports: [
+    // Client options, target NATS instance
     NatsJetStreamTransport.register({
       connectionOptions: {
       servers: "127.0.0.1:4222",
@@ -131,7 +139,7 @@ export class BookRoomCommandHandler {
         'my.super.subject',
         event,
         // deduplication trick : booking slug is unique using message ID
-        // dupe-window should be configured on stream, default 2mn
+        // dupelication_window should be configured on stream, default 2mn
         { msgID: uniqueBookingSlug }
       )
       .then((res: PubAck) => {

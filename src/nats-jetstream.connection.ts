@@ -1,11 +1,13 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { NatsConnection, connect } from "nats";
-import { NATS_JETSTREAM_OPTIONS } from "./constants";
-import { NatsJetStreamClientOptions } from "./interfaces/nats-jetstream-client-options.interface";
+import {
+  NatsJetStreamClientOptions,
+  NATS_JETSTREAM_OPTIONS,
+} from "./interfaces/nats-jetstream-client-options.interface";
 
 @Injectable()
-export class NatsJetStreamTransportConnection {
-  private nc: NatsConnection;
+export class NatsJetStreamConnection {
+  public nc: NatsConnection;
 
   constructor(
     @Inject(NATS_JETSTREAM_OPTIONS) private options: NatsJetStreamClientOptions
@@ -20,9 +22,12 @@ export class NatsJetStreamTransportConnection {
     return this.nc;
   }
   async close(): Promise<void> {
-    const nc = await this.assertConnection();
-    await nc.drain();
-    await nc.close();
+    // FIXME does not works
+    if (!this.nc) {
+      return;
+    }
+    await this.nc.drain();
+    await this.nc.close();
     this.nc = undefined;
   }
 }
