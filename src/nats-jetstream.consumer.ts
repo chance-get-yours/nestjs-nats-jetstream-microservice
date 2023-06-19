@@ -8,8 +8,11 @@ import {
   ConsumeOptions,
   JsMsg,
   ConsumerMessages,
+  ConsumerOpts,
+  connect,
+  FetchOptions,
 } from "nats";
-import { NatsJetStreamContext } from "./nats-jetstream.context";
+import { NatsJetStreamConsumeContext } from "./nats-jetstream.context";
 import { from } from "rxjs";
 import { NatsJetStreamClientOptions } from "./interfaces/nats-jetstream-client-options.interface";
 import { NatsJetStreamConnection } from "./nats-jetstream.connection";
@@ -26,60 +29,84 @@ export class NatsJetStreamConsumer
   constructor(private options: NatsJetStreamClientOptions) {
     super();
     this.codec = JSONCodec();
-    this.nc = new NatsJetStreamConnection(this.options).nc;
   }
   async listen(callback: () => null) {
+    this.nc = await connect(this.options.connectionOptions);
     this.jsm = await this.nc.jetstreamManager(this.options.jetStreamOptions);
     if (this.options.assertStreams) {
       for (const streamConfig of this.options.assertStreams) {
         await this.assertStream(streamConfig as StreamConfig);
       }
     }
+    if (this.options.assertConsumers) {
+      for (const consumerConfig of this.options.assertConsumers) {
+        await this.assertConsumer(
+          consumerConfig.streamName,
+          consumerConfig.consumerName,
+          consumerConfig.consumerOptions
+        );
+      }
+    }
     await this.bindEventHandlers();
     callback();
   }
 
-  async close() {
-    this.subscriptions.forEach((sub) => sub.close());
+  close() {
+    this.subscriptions.forEach((sub) => sub.stop());
+    this.nc.close();
+    this.nc.drain();
   }
   private async bindEventHandlers() {
     const eventHandlers = [...this.messageHandlers.entries()].filter(
       ([, handler]) => handler.isEventHandler
     );
 
-    for (const [consumerName, eventHandler] of eventHandlers) {
-      const subscription = await this.subsribeConsumer(
+    for (const [eventPattern, eventHandler] of eventHandlers) {
+      await this.consumeSubscription(
         eventHandler,
-        consumerName,
-        eventHandler.extras.stream_name as string,
-        eventHandler.extras as ConsumeOptions
+        eventPattern,
+        eventHandler.extras
       );
-      this.subscriptions.push(subscription);
     }
   }
-  private async subsribeConsumer(
+  private async consumeSubscription(
     eventHandler: Function,
-    consumerName: string,
-    streamName: string,
-    consumerOptions?: ConsumeOptions
+    eventPattern: string,
+    options: ConsumeOptions | FetchOptions
   ) {
-    const js = this.nc.jetstream(this.options.jetStreamOptions);
+    const [streamName, consumerName] = eventPattern.split(":");
     this.logger.log(
-      `Subscribed to events of stream ${streamName} with ${consumerName} consumer `
+      `Consume events on stream ${streamName} with ${consumerName} consumer `
+    );
+    const js = this.nc.jetstream(this.options.jetStreamOptions);
+    const consumer = await js.consumers.get(streamName, consumerName);
+
+    const sub = await consumer.consume(options);
+    this.subscriptions.push(sub);
+
+    for await (const msg of sub) {
+      const data = this.codec.decode(msg.data);
+      const context = new NatsJetStreamConsumeContext([msg]);
+      this.send(from(eventHandler(data, context)), () => null);
+    }
+  }
+
+  private async assertConsumer(
+    streamName: string,
+    consumerName: string,
+    options: Partial<ConsumerOpts>
+  ) {
+    this.logger.log(
+      `Assert consumer named ${consumerName} on stream ${streamName} `
     );
 
-    const consumer = await js.consumers.get(streamName, consumerName);
-    const subscription = await consumer.consume(consumerOptions);
-
-    for await (const msg of subscription) {
-      this.handleMessage(msg, eventHandler);
+    const consumers = await this.jsm.consumers.list(streamName).next();
+    const consumer = consumers.find(
+      (consumer) => consumer.name === consumerName
+    );
+    if (!consumer) {
+      await this.jsm.consumers.add(streamName, options);
     }
-    return subscription;
-  }
-  private handleMessage(msg: JsMsg, eventHandler: Function) {
-    const data = this.codec.decode(msg.data);
-    const context = new NatsJetStreamContext([msg]);
-    this.send(from(eventHandler(data, context)), () => null);
   }
   private async assertStream(streamConfig: StreamConfig) {
     const streams = await this.jsm.streams
