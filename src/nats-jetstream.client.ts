@@ -1,16 +1,13 @@
 import { Injectable, Inject } from "@nestjs/common";
 import {
   Codec,
-  ConsumerAPI,
   JetStreamClient,
-  JetStreamManager,
   JetStreamPublishOptions,
   JSONCodec,
   KV,
   KvOptions,
   NatsConnection,
   PubAck,
-  StreamAPI,
 } from "nats";
 import {
   NatsJetStreamClientOptions,
@@ -20,7 +17,6 @@ import { NatsJetStreamConnection } from "./nats-jetstream.connection";
 
 @Injectable()
 export class NatsJetStreamClient {
-  private jsm: JetStreamManager;
   private codec: Codec<JSON>;
   private nc: NatsConnection;
 
@@ -41,7 +37,7 @@ export class NatsJetStreamClient {
       js.publish(pattern, payload, publishOptions)
     );
   }
-  async jetStream(): Promise<JetStreamClient> {
+  private async jetStream(): Promise<JetStreamClient> {
     return this.nc.jetstream(this.options.jetStreamOptions);
   }
   async assertBucket(
@@ -49,17 +45,5 @@ export class NatsJetStreamClient {
     options?: Partial<KvOptions>
   ): Promise<KV> {
     return this.jetStream().then((js) => js.views.kv(bucket, options));
-  }
-  private async assertJetStreamManager() {
-    if (!this.jsm) {
-      this.jsm = await this.nc.jetstreamManager(this.options.jetStreamOptions);
-    }
-    return this.jsm;
-  }
-  async streams(): Promise<StreamAPI> {
-    return this.assertJetStreamManager().then((jsm) => jsm.streams);
-  }
-  async consumers(): Promise<ConsumerAPI> {
-    return this.assertJetStreamManager().then((jsm) => jsm.consumers);
   }
 }

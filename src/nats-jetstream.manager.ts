@@ -2,14 +2,9 @@ import { Injectable, Inject } from "@nestjs/common";
 import {
   Codec,
   ConsumerAPI,
-  JetStreamClient,
   JetStreamManager,
-  JetStreamPublishOptions,
   JSONCodec,
-  KV,
-  KvOptions,
   NatsConnection,
-  PubAck,
   StreamAPI,
 } from "nats";
 import {

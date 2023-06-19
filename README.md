@@ -54,6 +54,31 @@ const bootstrap = async () => {
           subjects: ["booking.>"],
         } as Partial<StreamConfig>
       ],
+      // Consumers will be upserted here
+      // trigger also the subsriptions, they are available using EventPattern
+      assertConsumers: [
+        {
+          consumerName: "cleanup",
+          streamName: "booking",
+          consumerOptions: {
+            description: "Trigger cleaning side effect when room is booked",
+            filter_subject: "booking.\*.room-booked-event.>",
+            durable: "cleanupStack",
+            manual_ack: true,
+          },
+          consumerName: "batchConsumer",
+          streamName: "booking",
+          consumerOptions: {
+            description: "Trigger cleaning side effect when room is booked",
+            filter_subject: "booking.\*",
+            durable: "cleanupStack",
+            manual_ack: true,
+          },
+
+        } as NatsJetStreamConsumerConfig
+
+      ],
+
       // To have the consumer running, you must create them
       // and have a controller using it 
     }),
@@ -83,22 +108,30 @@ import { EventPattern} from "./decorator/event-pattern.decorator";
 export class BotNatsController {
   constructor(private scheduleCleaning: ScheduleCleaningCommandHandler) {}
 
-  // Consumer will be created if not exists
-  // Updated if exists
-  @EventPattern("ConsumerName", {
-    stream_name: "hotel-booking",
-    description: "Trigger cleaning side effect when room is booked",
-    filter_subject: "booking.*.room-booked-event.>",
-    durable: "cleanupStack",
-    manual_ack: true,
-  })
+  // Plug to asserted consumers during microservice init 
+  // syntax is : streamName:consumerName
+  @EventPattern("booking:cleanup")
   async cleanup(
     @Payload() event: RoomBookedEvent,
-    @Ctx() context: NatsJetStreamContext
+    @Ctx() context: NatsJetStreamConsumeContext
   ) {
     // DO the work
     context.message.ack();
   }
+
+  // TODO
+  // MessagePattern is for kv watch ?
+  // Or keep it for request / reply ?
+  @MessagePattern("bucket")
+  async materialize(
+    @Payload() state: RoomState,
+    @Ctx() context: NatsJetStreamWatchContext
+  ) {
+    // Write state on third party
+    
+  }
+
+
 }
 
 ```
