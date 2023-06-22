@@ -13,28 +13,26 @@ import { NatsJetStreamContext } from "./nats-jetstream.context";
 import { from } from "rxjs";
 import { NatsJetStreamClientOptions } from "./interfaces/nats-jetstream-client-options.interface";
 import { NatsJetStreamConnection } from "./nats-jetstream.connection";
+import { Injectable } from '@nestjs/common';
 
+@Injectable()
 export class NatsJetStreamConsumer
   extends Server
   implements CustomTransportStrategy
 {
   private nc: NatsConnection;
-  private codec: Codec<JSON>;
+  private codec = JSONCodec();
   private jsm: JetStreamManager;
   private subscriptions: ConsumerMessages[];
 
   constructor(private options: NatsJetStreamClientOptions) {
     super();
-    this.codec = JSONCodec();
-    this.nc = new NatsJetStreamConnection(this.options).nc;
   }
+
   async listen(callback: () => null) {
-    this.jsm = await this.nc.jetstreamManager(this.options.jetStreamOptions);
-    if (this.options.assertStreams) {
-      for (const streamConfig of this.options.assertStreams) {
-        await this.assertStream(streamConfig as StreamConfig);
-      }
-    }
+    const cnx = new NatsJetStreamConnection(this.options);
+    this.nc = await cnx.assertConnection();
+    this.jsm = await this.nc.jetstreamManager(this.options.jetStreamOptions)
     await this.bindEventHandlers();
     callback();
   }
@@ -42,16 +40,14 @@ export class NatsJetStreamConsumer
   async close() {
     this.subscriptions.forEach((sub) => sub.close());
   }
-  private async bindEventHandlers() {
-    const eventHandlers = [...this.messageHandlers.entries()].filter(
-      ([, handler]) => handler.isEventHandler
-    );
+  private async bindEventHandlers()  {
+    const eventHandlers = [...this.messageHandlers.entries()]
 
     for (const [consumerName, eventHandler] of eventHandlers) {
       const subscription = await this.subsribeConsumer(
         eventHandler,
         consumerName,
-        eventHandler.extras.stream_name as string,
+        eventHandler.extras.streamName as string,
         eventHandler.extras as ConsumeOptions
       );
       this.subscriptions.push(subscription);

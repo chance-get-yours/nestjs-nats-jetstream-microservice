@@ -12,7 +12,6 @@ export class NatsJetStreamConnection {
   constructor(
     @Inject(NATS_JETSTREAM_OPTIONS) private options: NatsJetStreamClientOptions
   ) {
-    this.assertConnection();
   }
   public async assertConnection(): Promise<NatsConnection> {
     if (!this.nc) {

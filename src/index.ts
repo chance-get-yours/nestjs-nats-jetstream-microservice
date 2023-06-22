@@ -6,4 +6,3 @@ export * from "./nats-jetstream.context";
 export * from "./nats-jetstream.client";
 export * from "./nats-jetstream.manager";
 export * from "./nats-jetstream.connection";
-export * from "./decorator/event-pattern.decorator";
