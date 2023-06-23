@@ -1,6 +1,6 @@
 {
   "name": "@chance-get-yours/nestjs-nats-jetstream-microservice",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NATS JetStream Custom Transporter for NestJS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

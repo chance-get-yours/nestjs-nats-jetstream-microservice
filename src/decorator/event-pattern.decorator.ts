@@ -1,12 +1,12 @@
-import { EventPattern as OriginalEventPattern } from '@nestjs/microservices';
-import { NatsJetStreamConsumerOptions } from '../interfaces/nats-jetstream-consumer-options.interface';
+import { EventPattern as OriginalEventPattern } from "@nestjs/microservices";
+import { NatsJetStreamConsumerOptions } from "src/interfaces/nats-jetstream-consumer-options.interface";
 
 /**
- * Subscribes to incoming events which fulfils chosen pattern.
+ * FIXME can it work ?
  */
 export const EventPattern = (
   metadata: any,
-  transportOrExtras?: NatsJetStreamConsumerOptions,
+  transportOrExtras?: NatsJetStreamConsumerOptions
 ) => {
   return OriginalEventPattern(metadata, transportOrExtras);
 };
